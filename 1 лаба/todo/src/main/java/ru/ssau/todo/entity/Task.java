@@ -18,7 +18,6 @@ public class Task {
         this.createdBy = createdBy;
     }
 
-    // Все геттеры и сеттеры ОБЯЗАТЕЛЬНЫ!
     public Long getId()         { return id; }
     public void setId(Long id)  { this.id = id; }
 

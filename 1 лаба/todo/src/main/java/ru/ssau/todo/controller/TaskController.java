@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import ru.ssau.todo.MyErrorException;
 import ru.ssau.todo.entity.Task;
 import ru.ssau.todo.repository.TaskRepository;
 
@@ -71,7 +72,7 @@ public class TaskController {
         try {
             repository.update(existing);
             return ResponseEntity.ok().build();
-        } catch (Exception e) {
+        } catch (MyErrorException e) {
             return ResponseEntity.notFound().build();
         }
     }

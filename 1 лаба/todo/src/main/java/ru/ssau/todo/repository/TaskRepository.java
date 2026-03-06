@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import ru.ssau.todo.MyErrorException;
 import ru.ssau.todo.entity.Task;
 
 /**
@@ -48,7 +49,7 @@ public interface TaskRepository {
      * @param task объект задачи с обновленными данными.
      * @throws **Exception** **(специализированное исключение)** если задача с таким ID не существует.
      */
-    void update(Task task) throws Exception;
+    void update(Task task)  throws MyErrorException;
 
     /**
      * Удаляет задачу из хранилища по её идентификатору.

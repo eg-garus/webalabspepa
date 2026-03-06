@@ -1,14 +1,18 @@
 package ru.ssau.todo.repository;
 
-import ru.ssau.todo.entity.Task;
-import ru.ssau.todo.entity.TaskStatus;
-
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Repository;
+
+import ru.ssau.todo.MyErrorException;
+import ru.ssau.todo.entity.Task;
+import ru.ssau.todo.entity.TaskStatus;
 
 @Repository
 public class TaskInMemoryRepository implements TaskRepository {
@@ -46,9 +50,9 @@ public class TaskInMemoryRepository implements TaskRepository {
     }
 
     @Override
-    public void update(Task task) throws Exception {
+    public void update(Task task) throws MyErrorException {
         if (task == null || task.getId() == null || !tasks.containsKey(task.getId())) {
-            throw new Exception("Task not found with id: " + (task != null ? task.getId() : "null"));
+            throw new MyErrorException("Task not found with id: " + (task != null ? task.getId() : "null"));
         }
         tasks.put(task.getId(), task);
     }
