@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import ru.ssau.todo.MyErrorException;
@@ -15,6 +16,7 @@ import ru.ssau.todo.entity.Task;
 import ru.ssau.todo.entity.TaskStatus;
 
 @Repository
+@Profile("inmemory")
 public class TaskInMemoryRepository implements TaskRepository {
 
     private final Map<Long, Task> tasks = new HashMap<>();

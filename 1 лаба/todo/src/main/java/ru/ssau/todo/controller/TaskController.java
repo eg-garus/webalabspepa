@@ -20,20 +20,20 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ru.ssau.todo.MyErrorException;
 import ru.ssau.todo.entity.Task;
-import ru.ssau.todo.repository.TaskRepository;
+import ru.ssau.todo.service.TaskService;
 
 @RestController
 @RequestMapping("/tasks")
 public class TaskController {
 
-    private final TaskRepository repository;
+    private final TaskService service;
 
-    public TaskController(TaskRepository repository) {
-        this.repository = repository;
+    public TaskController(TaskService service) {
+        this.service = service;
     }
 
     @GetMapping
-    public List<Task> getAll(
+    public ResponseEntity<List<Task>> getTasks(
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             @RequestParam Long userId) {
@@ -41,50 +41,61 @@ public class TaskController {
         LocalDateTime start = from != null ? LocalDateTime.parse(from) : LocalDateTime.MIN;
         LocalDateTime end   = to   != null ? LocalDateTime.parse(to)   : LocalDateTime.MAX;
 
-        return repository.findAll(start, end, userId);
+        List<Task> tasks = service.findAll(start, end, userId);
+        return ResponseEntity.ok(tasks);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Task> getById(@PathVariable Long id) {
-        return repository.findById(id)
+    public ResponseEntity<Task> getTaskById(@PathVariable Long id) {
+        return service.findById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<Task> create(@RequestBody Task task) {
-        Task created = new Task(task.getTitle(), task.getStatus(), task.getCreatedBy());
-        created = repository.create(created);
-        return ResponseEntity.created(URI.create("/tasks/" + created.getId())).body(created);
+    public ResponseEntity<Task> createTask(@RequestBody Task task) {
+        Task toCreate = new Task(task.getTitle(), task.getStatus(), task.getCreatedBy());
+
+        Task created = service.create(toCreate);
+
+        URI location = URI.create("/tasks/" + created.getId());
+        return ResponseEntity.created(location).body(created);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Void> update(@PathVariable Long id, @RequestBody Task updates) {
-        Optional<Task> existingOpt = repository.findById(id);
+    public ResponseEntity<Void> updateTask(
+            @PathVariable Long id,
+            @RequestBody Task updates) throws MyErrorException {
+
+        Optional<Task> existingOpt = service.findById(id);
+
         if (existingOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         Task existing = existingOpt.get();
-        if (updates.getTitle() != null) existing.setTitle(updates.getTitle());
-        if (updates.getStatus() != null) existing.setStatus(updates.getStatus());
 
-        try {
-            repository.update(existing);
-            return ResponseEntity.ok().build();
-        } catch (MyErrorException e) {
-            return ResponseEntity.notFound().build();
+        if (updates.getTitle() != null) {
+            existing.setTitle(updates.getTitle());
         }
-    }
+        if (updates.getStatus() != null) {
+            existing.setStatus(updates.getStatus());
+        }
+
+        service.update(existing);
+
+        return ResponseEntity.ok().build();
+}
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
-        repository.deleteById(id);
+    public void deleteTask(@PathVariable Long id) {
+        service.deleteById(id);
     }
 
     @GetMapping("/active/count")
-    public long countActive(@RequestParam Long userId) {
-        return repository.countActiveTasksByUserId(userId);
+    public ResponseEntity<Long> countActiveTasks(@RequestParam Long userId) {
+        long count = service.countActiveTasksByUserId(userId);
+        return ResponseEntity.ok(count);
     }
 }
