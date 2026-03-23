@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ru.ssau.todo.MyErrorException;
 import ru.ssau.todo.entity.Task;
+import ru.ssau.todo.entity.TaskStatus;
 import ru.ssau.todo.repository.TaskRepository;
 
 @Service
@@ -29,8 +31,37 @@ public class TaskService {
         return repository.create(task);
     }
 
-    public void update(Task task) throws MyErrorException {
-        repository.update(task);
+    @Transactional
+    public void update(Task updates) throws MyErrorException {
+        Task existing = repository.findById(updates.getId())
+            .orElseThrow(() -> new IllegalArgumentException("Задача не найдена"));
+
+        TaskStatus newStatus = updates.getStatus() != null
+            ? updates.getStatus()
+            : existing.getStatus();
+
+        boolean willBeActive = newStatus == TaskStatus.OPEN || newStatus == TaskStatus.IN_PROGRESS;
+
+        if (willBeActive &&
+            (existing.getStatus() != TaskStatus.OPEN && existing.getStatus() != TaskStatus.IN_PROGRESS)) {
+
+            long currentActive = repository.countActiveTasksByUserId(existing.getCreatedBy());
+
+            if (currentActive >= 10) {
+                throw new IllegalStateException(
+                    "Нельзя сделать задачу активной — уже достигнут лимит в 10 активных задач"
+                );
+            }
+        }
+
+        if (updates.getTitle() != null) {
+            existing.setTitle(updates.getTitle());
+        }
+        if (updates.getStatus() != null) {
+            existing.setStatus(updates.getStatus());
+        }
+
+        repository.update(existing);
     }
 
     public void deleteById(long id) {
