@@ -1,56 +1,66 @@
 package ru.ssau.todo.service;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import ru.ssau.todo.dto.TaskDto;
+import ru.ssau.todo.entity.Task;
+import ru.ssau.todo.entity.TaskStatus;
+import ru.ssau.todo.entity.User;
+import ru.ssau.todo.repository.TaskRepository;
+import ru.ssau.todo.repository.UserRepository;
+
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import ru.ssau.todo.MyErrorException;
-import ru.ssau.todo.entity.Task;
-import ru.ssau.todo.entity.TaskStatus;
-import ru.ssau.todo.repository.TaskRepository;
+import java.util.stream.Collectors;
 
 @Service
 public class TaskService {
 
-    private final TaskRepository repository;
+    private final TaskRepository taskRepository;
+    private final UserRepository userRepository;
 
-    public TaskService(TaskRepository repository) {
-        this.repository = repository;
-    }
-
-    public Task create(Task task) {
-        long activeCount = repository.countActiveTasksByUserId(task.getCreatedBy());
-        if (activeCount >= 10) {
-            throw new IllegalStateException("Пользователь не может иметь более 10 активных задач");
-        }
-
-        return repository.create(task);
+    public TaskService(TaskRepository taskRepository, UserRepository userRepository) {
+        this.taskRepository = taskRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
-    public void update(Task updates) throws MyErrorException {
-        Task existing = repository.findById(updates.getId())
-            .orElseThrow(() -> new IllegalArgumentException("Задача не найдена"));
+    public TaskDto create(TaskDto dto) {
+        long activeCount = taskRepository.countActiveTasksByUserId(dto.getCreatedBy());
+        if (activeCount >= 10) {
+            throw new IllegalStateException("Пользователь не может иметь более 10 активных задач одновременно");
+        }
 
-        TaskStatus newStatus = updates.getStatus() != null
-            ? updates.getStatus()
-            : existing.getStatus();
+        User user = userRepository.findById(dto.getCreatedBy())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь с id " + dto.getCreatedBy() + " не найден"));
+
+        Task task = Task.builder()
+                .title(dto.getTitle())
+                .status(dto.getStatus())
+                .createdByUser(user)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        Task savedTask = taskRepository.save(task);
+        return convertToDto(savedTask);
+    }
+
+    @Transactional
+    public TaskDto update(Long id, TaskDto updates) {
+        Task existing = taskRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Задача с id " + id + " не найдена"));
+
+        TaskStatus newStatus = updates.getStatus() != null ? updates.getStatus() : existing.getStatus();
 
         boolean willBeActive = newStatus == TaskStatus.OPEN || newStatus == TaskStatus.IN_PROGRESS;
+        boolean wasActive = existing.getStatus() == TaskStatus.OPEN || existing.getStatus() == TaskStatus.IN_PROGRESS;
 
-        if (willBeActive &&
-            (existing.getStatus() != TaskStatus.OPEN && existing.getStatus() != TaskStatus.IN_PROGRESS)) {
-
-            long currentActive = repository.countActiveTasksByUserId(existing.getCreatedBy());
-
+        if (willBeActive && !wasActive) {
+            long currentActive = taskRepository.countActiveTasksByUserId(existing.getCreatedByUser().getId());
             if (currentActive >= 10) {
-                throw new IllegalStateException(
-                    "Нельзя сделать задачу активной — уже достигнут лимит в 10 активных задач"
-                );
+                throw new IllegalStateException("Нельзя сделать задачу активной — уже достигнут лимит в 10 активных задач");
             }
         }
 
@@ -61,32 +71,51 @@ public class TaskService {
             existing.setStatus(updates.getStatus());
         }
 
-        repository.update(existing);
+        Task updatedTask = taskRepository.save(existing);
+        return convertToDto(updatedTask);
     }
 
-    public void deleteById(long id) {
-        Task task = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Задача не найдена"));
+    @Transactional
+    public void deleteById(Long id) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Задача с id " + id + " не найдена"));
 
-        LocalDateTime now = LocalDateTime.now();
-        long minutes = ChronoUnit.MINUTES.between(task.getCreatedAt(), now);
+        long minutes = ChronoUnit.MINUTES.between(task.getCreatedAt(), LocalDateTime.now());
 
         if (minutes < 5) {
             throw new IllegalStateException("Нельзя удалять задачу, созданную менее 5 минут назад");
         }
 
-        repository.deleteById(id);
+        taskRepository.deleteById(id);
     }
 
-    public List<Task> findAll(LocalDateTime from, LocalDateTime to, long userId) {
-        return repository.findAll(from, to, userId);
+    public List<TaskDto> findAll(LocalDateTime from, LocalDateTime to, Long userId) {
+        LocalDateTime start = from != null ? from : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime end   = to != null ? to   : LocalDateTime.of(2100, 12, 31, 23, 59);
+
+        List<Task> tasks = taskRepository.findAllByUserIdAndDateRange(userId, start, end);
+
+        return tasks.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
     }
 
-    public Optional<Task> findById(long id) {
-        return repository.findById(id);
+    public Optional<TaskDto> findById(Long id) {
+        return taskRepository.findById(id)
+                .map(this::convertToDto);
     }
 
-    public long countActiveTasksByUserId(long userId) {
-        return repository.countActiveTasksByUserId(userId);
+    public long countActiveTasksByUserId(Long userId) {
+        return taskRepository.countActiveTasksByUserId(userId);
+    }
+
+    private TaskDto convertToDto(Task task) {
+        return TaskDto.builder()
+                .id(task.getId())
+                .title(task.getTitle())
+                .status(task.getStatus())
+                .createdBy(task.getCreatedByUser().getId())
+                .createdAt(task.getCreatedAt())
+                .build();
     }
 }
